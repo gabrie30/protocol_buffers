@@ -85,6 +85,7 @@ func list() error {
 		}
 
 		var length int64
+
 		if err := gob.NewDecoder(bytes.NewReader(b[:4])).Decode(&length); err != nil {
 			return fmt.Errorf("could not decode message length: %v", err)
 		}
