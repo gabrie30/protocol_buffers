@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"path/filepath"
 
 	"github.com/gabrie30/protocol_buffers/todo"
 	"github.com/golang/protobuf/proto"
@@ -25,10 +26,28 @@ const (
 
 var endianness = binary.LittleEndian
 
-func (s taskServer) List(ctx context.Context, void *todo.Void) (*todo.TaskList, error) {
-	b, err := ioutil.ReadFile(dbPath)
+func findPath() string {
+	absPath, _ := filepath.Abs("../../" + dbPath)
+	return absPath
+}
+
+func main() {
+	srv := grpc.NewServer()
+	var tasks taskServer
+	todo.RegisterTasksServer(srv, tasks)
+	l, err := net.Listen("tcp", ":8888")
 	if err != nil {
-		return nil, fmt.Errorf("could not read this file %s: %v", dbPath, err)
+		log.Fatalf("could not list to :8888: %v", err)
+	}
+
+	log.Fatal(srv.Serve(l))
+}
+
+func (s taskServer) List(ctx context.Context, void *todo.Void) (*todo.TaskList, error) {
+
+	b, err := ioutil.ReadFile(findPath())
+	if err != nil {
+		return nil, fmt.Errorf("could not read this file %s: %v", findPath(), err)
 	}
 
 	var tasks todo.TaskList
@@ -66,18 +85,6 @@ func (s taskServer) List(ctx context.Context, void *todo.Void) (*todo.TaskList, 
 	}
 }
 
-func main() {
-	srv := grpc.NewServer()
-	var tasks taskServer
-	todo.RegisterTasksServer(srv, tasks)
-	l, err := net.Listen("tcp", ":8888")
-	if err != nil {
-		log.Fatalf("could not list to :8888: %v", err)
-	}
-
-	log.Fatal(srv.Serve(l))
-}
-
 func (s taskServer) Add(ctx context.Context, text *todo.Text) (*todo.Task, error) {
 	task := &todo.Task{
 		Text: text.Text,
@@ -89,9 +96,9 @@ func (s taskServer) Add(ctx context.Context, text *todo.Text) (*todo.Task, error
 		return nil, fmt.Errorf("could not encode task %+v", err)
 	}
 
-	f, err := os.OpenFile(dbPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	f, err := os.OpenFile(findPath(), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
-		return nil, fmt.Errorf("could not open %s: %v", dbPath, err)
+		return nil, fmt.Errorf("could not open %s: %v", findPath(), err)
 	}
 
 	if err := binary.Write(f, endianness, length(len(b))); err != nil {
@@ -104,7 +111,7 @@ func (s taskServer) Add(ctx context.Context, text *todo.Text) (*todo.Task, error
 	}
 
 	if err := f.Close(); err != nil {
-		return nil, fmt.Errorf("could not close file %s: %v", dbPath, err)
+		return nil, fmt.Errorf("could not close file %s: %v", findPath(), err)
 	}
 
 	return task, nil
